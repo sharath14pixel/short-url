@@ -2,6 +2,21 @@ import httpx
 import time
 import sys
 
+# Wrap httpx requests to use a 30-second timeout
+client = httpx.Client(timeout=30.0)
+def get(*args, **kwargs):
+    return client.get(*args, **kwargs)
+def post(*args, **kwargs):
+    return client.post(*args, **kwargs)
+def put(*args, **kwargs):
+    return client.put(*args, **kwargs)
+def delete(*args, **kwargs):
+    return client.delete(*args, **kwargs)
+httpx.get = get
+httpx.post = post
+httpx.put = put
+httpx.delete = delete
+
 BASE_URL = "http://127.0.0.1:8000"
 
 def test_flow():
