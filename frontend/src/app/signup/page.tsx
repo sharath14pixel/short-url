@@ -43,8 +43,8 @@ export default function Signup() {
         password,
       });
 
-      const { user, access_token, refresh_token } = res.data;
-      setAuth(user, access_token, refresh_token);
+      const { user, access_token } = res.data;
+      setAuth(user, access_token);
       router.push('/dashboard');
     } catch (err: any) {
       const detail = err.response?.data?.detail;

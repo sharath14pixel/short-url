@@ -19,7 +19,7 @@ from app.utils.dependencies import get_optional_user, get_current_user, check_ra
 
 router = APIRouter(prefix="/api/links", tags=["Links"])
 
-def make_link_response(link: Link, request: Request, db: Session) -> LinkResponse:
+def make_link_response(link: Link, request: Request, db: Session, include_qr: bool = True) -> LinkResponse:
     """Helper to convert database Link object to LinkResponse including QR code and stats."""
     code_or_alias = link.custom_alias or link.short_code
     # Build short URL
@@ -27,7 +27,7 @@ def make_link_response(link: Link, request: Request, db: Session) -> LinkRespons
     short_url = f"{base_url}{code_or_alias}"
     
     # Generate QR Code
-    qr_code = generate_qr_code_base64(short_url)
+    qr_code = generate_qr_code_base64(short_url) if include_qr else None
     
     # Count clicks
     from app.models.click import Click
@@ -44,7 +44,8 @@ def make_link_response(link: Link, request: Request, db: Session) -> LinkRespons
         expires_at=link.expires_at,
         created_at=link.created_at,
         qr_code_base64=qr_code,
-        click_count=click_count
+        click_count=click_count,
+        is_password_protected=link.is_password_protected
     )
 
 def invalidate_link_cache(short_code: str, custom_alias: Optional[str] = None):
@@ -93,13 +94,17 @@ def create_link(
     else:
         short_code = generate_unique_short_code(db)
         
+    from app.core.security import hash_password
+    password_hash = hash_password(link_in.password) if link_in.password else None
+
     # 3. Save to database
     db_link = Link(
         user_id=user.id if user else None,
         original_url=link_in.original_url,
         short_code=short_code,
         custom_alias=custom_alias,
-        expires_at=link_in.expires_at
+        expires_at=link_in.expires_at,
+        password_hash=password_hash
     )
     db.add(db_link)
     db.commit()
@@ -130,7 +135,7 @@ def list_links(
         .order_by(Link.created_at.desc())\
         .offset(skip).limit(limit).all()
         
-    return [make_link_response(link, request, db) for link in links]
+    return [make_link_response(link, request, db, include_qr=False) for link in links]
 
 @router.get("/{id}", response_model=LinkResponse)
 def get_link(
@@ -167,22 +172,29 @@ def update_link(
     # Invalidate cache for current code/alias before updates
     invalidate_link_cache(link.short_code, link.custom_alias)
     
-    if link_in.custom_alias is not None:
+    if "custom_alias" in link_in.model_fields_set:
         alias = link_in.custom_alias
         # Only validate if alias is actually changing
         if alias != link.custom_alias:
-            if not is_code_available(db, alias):
+            if alias is not None and not is_code_available(db, alias):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"The alias '{alias}' is already in use or restricted."
                 )
             link.custom_alias = alias
             
-    if link_in.expires_at is not None:
+    if "expires_at" in link_in.model_fields_set:
         link.expires_at = link_in.expires_at
         
-    if link_in.is_active is not None:
+    if "is_active" in link_in.model_fields_set and link_in.is_active is not None:
         link.is_active = link_in.is_active
+
+    if "password" in link_in.model_fields_set:
+        from app.core.security import hash_password
+        if link_in.password == "" or link_in.password is None:
+            link.password_hash = None
+        else:
+            link.password_hash = hash_password(link_in.password)
         
     db.commit()
     db.refresh(link)

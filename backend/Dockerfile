@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source code
 COPY . .
 
+# Download offline GeoIP database
+RUN python download_db.py
+
 # Expose port
 EXPOSE 8000
 

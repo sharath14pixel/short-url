@@ -8,6 +8,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // Attach access token to outgoing requests
@@ -46,16 +47,6 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
-      const refreshToken = useAuthStore.getState().refreshToken;
-      
-      if (!refreshToken) {
-        useAuthStore.getState().logout();
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
-        return Promise.reject(error);
-      }
-      
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -70,10 +61,12 @@ api.interceptors.response.use(
       isRefreshing = true;
       
       try {
-        // Attempt to call the token refresh endpoint
-        const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-          refresh_token: refreshToken,
-        });
+        // Attempt to call the token refresh endpoint (cookies automatically included)
+        const response = await axios.post(
+          `${API_BASE_URL}/api/auth/refresh`,
+          {},
+          { withCredentials: true }
+        );
         
         const { access_token } = response.data;
         useAuthStore.getState().setAccessToken(access_token);

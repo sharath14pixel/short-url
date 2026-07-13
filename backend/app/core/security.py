@@ -1,7 +1,8 @@
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, Union
+import uuid
 import jwt
 import bcrypt
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Union
 from app.core.config import settings
 
 def hash_password(password: str) -> str:
@@ -25,24 +26,25 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """Create a short-lived access JWT token."""
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-def create_refresh_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None) -> str:
-    """Create a longer-lived refresh JWT token."""
+def create_refresh_token(subject: Union[str, Any], expires_delta: Optional[timedelta] = None, jti: Optional[str] = None) -> tuple[str, str]:
+    """Create a longer-lived refresh JWT token. Returns a tuple (encoded_jwt, jti)."""
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     
-    to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
+    token_jti = jti or str(uuid.uuid4())
+    to_encode = {"exp": expire, "sub": str(subject), "type": "refresh", "jti": token_jti}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded_jwt
+    return encoded_jwt, token_jti
 
 def decode_token(token: str) -> Dict[str, Any]:
     """Decode a JWT and return the payload. Raises jwt.PyJWTError if invalid."""

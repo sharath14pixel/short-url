@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [originalUrl, setOriginalUrl] = useState('');
   const [customAlias, setCustomAlias] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
+  const [password, setPassword] = useState('');
   const [modalError, setModalError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
@@ -86,6 +87,7 @@ export default function Dashboard() {
       const payload: any = { original_url: originalUrl };
       if (customAlias) payload.custom_alias = customAlias;
       if (expiresAt) payload.expires_at = new Date(expiresAt).toISOString();
+      if (password) payload.password = password;
 
       await api.post('/api/links', payload);
       
@@ -93,6 +95,7 @@ export default function Dashboard() {
       setOriginalUrl('');
       setCustomAlias('');
       setExpiresAt('');
+      setPassword('');
       setIsModalOpen(false);
       fetchLinks();
     } catch (err: any) {
@@ -245,6 +248,13 @@ export default function Dashboard() {
                   {link.expires_at && new Date(link.expires_at) < new Date() && (
                     <span className="px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/20 text-[9px] font-semibold text-red-400">
                       Expired
+                    </span>
+                  )}
+
+                  {link.is_password_protected && (
+                    <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[9px] font-semibold text-amber-300 flex items-center gap-1">
+                      <Lock className="h-2.5 w-2.5" />
+                      Protected
                     </span>
                   )}
                 </div>
@@ -408,6 +418,23 @@ export default function Dashboard() {
                     value={expiresAt}
                     onChange={(e) => setExpiresAt(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl glass-input text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Password Protection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Password Protection (Optional)</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-4.5 w-4.5 text-slate-400" />
+                  </div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password to restrict access"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl glass-input text-xs"
                   />
                 </div>
               </div>

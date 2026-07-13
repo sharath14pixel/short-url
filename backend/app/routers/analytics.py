@@ -3,6 +3,7 @@ from collections import Counter
 from typing import List
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 # pyrefly: ignore [missing-import]
 from user_agents import parse
@@ -34,9 +35,9 @@ def get_link_clicks(
         )
         
     clicks = db.query(Click).filter(Click.link_id == id)\
-        .order_by(Click.timestamp.desc())\
-        .offset(skip).limit(limit).all()
-        
+         .order_by(Click.timestamp.desc())\
+         .offset(skip).limit(limit).all()
+         
     return clicks
 
 @router.get("/{id}/stats", response_model=ClickStats)
@@ -53,25 +54,36 @@ def get_link_stats(
             detail="Link not found or access denied."
         )
         
-    # Fetch all clicks for this link
-    clicks = db.query(Click).filter(Click.link_id == id).all()
-    total_clicks = len(clicks)
+    # 1. Total click count
+    total_clicks = db.query(func.count(Click.id)).filter(Click.link_id == id).scalar() or 0
     
-    # 1. Group Clicks by Day (YYYY-MM-DD)
-    day_counter = Counter()
-    for click in clicks:
-        day_str = click.timestamp.strftime("%Y-%m-%d")
-        day_counter[day_str] += 1
-    # Sort chronologically by date
+    # 2. Group Clicks by Day (YYYY-MM-DD)
+    day_results = db.query(
+        func.date(Click.timestamp).label("day"),
+        func.count(Click.id)
+    ).filter(Click.link_id == id)\
+     .group_by(func.date(Click.timestamp))\
+     .order_by("day").all()
+     
     clicks_by_day = [
-        StatItem(label=day, count=count) 
-        for day, count in sorted(day_counter.items())
+        StatItem(
+            label=day.strftime("%Y-%m-%d") if hasattr(day, "strftime") else str(day),
+            count=count
+        )
+        for day, count in day_results
     ]
     
-    # 2. Top Referrers (parse hostname for cleaner logs)
+    # 3. Top Referrers
+    referrer_results = db.query(
+        Click.referrer,
+        func.count(Click.id)
+    ).filter(Click.link_id == id)\
+     .group_by(Click.referrer)\
+     .order_by(func.count(Click.id).desc())\
+     .limit(10).all()
+     
     ref_counter = Counter()
-    for click in clicks:
-        ref = click.referrer
+    for ref, count in referrer_results:
         if not ref:
             ref_label = "Direct / Email"
         else:
@@ -82,38 +94,50 @@ def get_link_stats(
                     ref_label = ref
             except Exception:
                 ref_label = ref
-        ref_counter[ref_label] += 1
+        ref_counter[ref_label] += count
+        
     top_referrers = [
-        StatItem(label=ref, count=count) 
+        StatItem(label=ref, count=count)
         for ref, count in ref_counter.most_common(10)
     ]
     
-    # 3. Top Countries
-    country_counter = Counter()
-    for click in clicks:
-        country_counter[click.country or "Unknown"] += 1
+    # 4. Top Countries
+    country_results = db.query(
+        Click.country,
+        func.count(Click.id)
+    ).filter(Click.link_id == id)\
+     .group_by(Click.country)\
+     .order_by(func.count(Click.id).desc())\
+     .limit(10).all()
+     
     top_countries = [
-        StatItem(label=country, count=count) 
-        for country, count in country_counter.most_common(10)
+        StatItem(label=country or "Unknown", count=count)
+        for country, count in country_results
     ]
     
-    # 4. Devices and Browsers parsing via user-agents
+    # 5. Devices and Browsers parsing via grouped user-agents
+    ua_results = db.query(
+        Click.user_agent,
+        func.count(Click.id)
+    ).filter(Click.link_id == id)\
+     .group_by(Click.user_agent)\
+     .all()
+     
     device_counter = Counter()
     browser_counter = Counter()
     
-    for click in clicks:
-        ua_str = click.user_agent
+    for ua_str, count in ua_results:
         if not ua_str:
-            device_counter["Unknown"] += 1
-            browser_counter["Unknown"] += 1
+            device_counter["Unknown"] += count
+            browser_counter["Unknown"] += count
             continue
             
         try:
             ua = parse(ua_str)
             
-            # Browser Name (e.g., Chrome, Safari, Mobile Safari, Firefox)
+            # Browser Name
             browser_label = ua.browser.family
-            browser_counter[browser_label] += 1
+            browser_counter[browser_label] += count
             
             # Device Category
             if ua.is_pc:
@@ -126,17 +150,17 @@ def get_link_stats(
                 device_label = "Search Bot"
             else:
                 device_label = "Other / Unknown"
-            device_counter[device_label] += 1
+            device_counter[device_label] += count
         except Exception:
-            device_counter["Unknown"] += 1
-            browser_counter["Unknown"] += 1
+            device_counter["Unknown"] += count
+            browser_counter["Unknown"] += count
             
     top_devices = [
-        StatItem(label=dev, count=count) 
+        StatItem(label=dev, count=count)
         for dev, count in device_counter.most_common(5)
     ]
     top_browsers = [
-        StatItem(label=browser, count=count) 
+        StatItem(label=browser, count=count)
         for browser, count in browser_counter.most_common(5)
     ]
     

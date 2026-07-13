@@ -5,12 +5,11 @@ from app.db.base import Base
 from app.db.session import engine
 from app.routers import auth, links, analytics, redirect
 
-# Auto-create tables on startup (especially useful for local SQLite development)
-if settings.DATABASE_URL.startswith("sqlite"):
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception as e:
-        print(f"Error creating database tables on startup: {e}")
+# Auto-create tables on startup
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Error creating database tables on startup: {e}")
 
 app = FastAPI(
     title="SmartLink API",

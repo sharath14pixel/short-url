@@ -51,6 +51,8 @@ export default function LinkDetails({ params }: { params: Promise<{ id: string }
   const [editAlias, setEditAlias] = useState('');
   const [editExpires, setEditExpires] = useState('');
   const [editActive, setEditActive] = useState(true);
+  const [editPassword, setEditPassword] = useState('');
+  const [clearPassword, setClearPassword] = useState(false);
   const [editError, setEditError] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -95,6 +97,8 @@ export default function LinkDetails({ params }: { params: Promise<{ id: string }
       } else {
         setEditExpires('');
       }
+      setEditPassword('');
+      setClearPassword(false);
     } catch (err: any) {
       setError('Failed to load link data or analytics. It might have been deleted.');
       if (err.response?.status === 401) {
@@ -140,6 +144,11 @@ export default function LinkDetails({ params }: { params: Promise<{ id: string }
         is_active: editActive,
         expires_at: editExpires ? new Date(editExpires).toISOString() : null,
       };
+      if (clearPassword) {
+        payload.password = "";
+      } else if (editPassword) {
+        payload.password = editPassword;
+      }
 
       const res = await api.put(`/api/links/${linkId}`, payload);
       setLinkData(res.data);
@@ -236,7 +245,7 @@ export default function LinkDetails({ params }: { params: Promise<{ id: string }
                 </div>
 
                 {/* Subdetails Grid */}
-                <div className="grid grid-cols-2 gap-4 text-xs text-slate-400">
+                <div className="grid grid-cols-3 gap-4 text-xs text-slate-400">
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-slate-500" />
                     <div>
@@ -246,11 +255,21 @@ export default function LinkDetails({ params }: { params: Promise<{ id: string }
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <Lock className="h-4 w-4 text-slate-500" />
+                    <Clock className="h-4 w-4 text-slate-500" />
                     <div>
                       <span className="block text-[8px] uppercase font-bold text-slate-500">Expiration</span>
                       <span className="text-white font-medium">
                         {linkData.expires_at ? new Date(linkData.expires_at).toLocaleDateString() : 'Never'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Lock className="h-4 w-4 text-slate-500" />
+                    <div>
+                      <span className="block text-[8px] uppercase font-bold text-slate-500">Security</span>
+                      <span className="text-white font-medium">
+                        {linkData.is_password_protected ? 'Passworded' : 'Public'}
                       </span>
                     </div>
                   </div>
@@ -334,6 +353,35 @@ export default function LinkDetails({ params }: { params: Promise<{ id: string }
                       className="w-full px-4 py-2 rounded-xl glass-input text-xs"
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1.5">Password Protection</label>
+                    <input
+                      type="password"
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      placeholder="Enter new password (optional)"
+                      disabled={clearPassword}
+                      className="w-full px-4 py-2 rounded-xl glass-input text-xs disabled:opacity-50"
+                    />
+                  </div>
+
+                  {linkData.is_password_protected && (
+                    <div className="flex items-center space-x-2 pt-4">
+                      <input
+                        type="checkbox"
+                        id="clearPassword"
+                        checked={clearPassword}
+                        onChange={(e) => setClearPassword(e.target.checked)}
+                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
+                      />
+                      <label htmlFor="clearPassword" className="text-xs text-red-400 font-medium cursor-pointer">
+                        Remove Password Protection
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2 pt-2">

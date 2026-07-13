@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
@@ -22,12 +23,12 @@ class UserResponse(UserBase):
 
 class Token(BaseModel):
     access_token: str
-    refresh_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: UserResponse
 
 class TokenRefresh(BaseModel):
-    refresh_token: str
+    refresh_token: Optional[str] = None
 
 class TokenRefreshResponse(BaseModel):
     access_token: str

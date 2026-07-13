@@ -28,12 +28,33 @@ class LinkBase(BaseModel):
         return v
 
 class LinkCreate(LinkBase):
-    pass
+    password: Optional[str] = Field(None, description="Optional link protection password")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v != "":
+            if len(v) < 4:
+                raise ValueError("Password must be at least 4 characters long")
+            if len(v) > 50:
+                raise ValueError("Password must be at most 50 characters long")
+        return v
 
 class LinkUpdate(BaseModel):
     custom_alias: Optional[str] = Field(None, min_length=3, max_length=50)
     expires_at: Optional[datetime] = None
     is_active: Optional[bool] = None
+    password: Optional[str] = Field(None, description="Optional link protection password; pass empty string to clear")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v != "":
+            if len(v) < 4:
+                raise ValueError("Password must be at least 4 characters long")
+            if len(v) > 50:
+                raise ValueError("Password must be at most 50 characters long")
+        return v
 
     @field_validator("custom_alias")
     @classmethod
@@ -56,6 +77,7 @@ class LinkResponse(BaseModel):
     created_at: datetime
     qr_code_base64: Optional[str] = None
     click_count: int = 0
+    is_password_protected: bool
 
     class Config:
         from_attributes = True
