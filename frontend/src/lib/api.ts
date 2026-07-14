@@ -43,8 +43,21 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Check if it's a 401 error and not a retry already
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Safety check: Avoid intercepting request if no config is present
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
+
+    const url = originalRequest.url || '';
+    
+    // Skip refresh token logic for authentication endpoints to prevent infinite loops
+    const isAuthEndpoint = 
+      url.includes('/api/auth/login') || 
+      url.includes('/api/auth/signup') || 
+      url.includes('/api/auth/refresh');
+
+    // Check if it's a 401 error and not a retry already, and NOT an authentication endpoint request
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
       
       if (isRefreshing) {
@@ -80,8 +93,13 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         isRefreshing = false;
         useAuthStore.getState().logout();
+        
+        // Only redirect to login if we are not already on the login or signup page
         if (typeof window !== 'undefined') {
-          window.location.href = '/login';
+          const currentPath = window.location.pathname;
+          if (currentPath !== '/login' && currentPath !== '/signup') {
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(refreshError);
       }
